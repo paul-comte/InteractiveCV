@@ -1,0 +1,9 @@
+yfinance
+pandas
+numpy
+scipy
+plotly
+streamlit
+matplotlib
+altair
+Pillow
