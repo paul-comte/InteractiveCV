@@ -111,20 +111,8 @@ def main():
             <strong style="color:#721c24;">Disclaimer:</strong>
             <p style="color:#721c24;">
                 I am actually using yfinance to download the options data. It may lead to some discrepancies in the results.
-                As it is a free API, it may not be as accurate as a paid one.
-            </p>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        """
-        <div style="background-color:#ff7f00;padding:10px;border-radius:5px;">
-            <strong style="color:#721c24;">Disclaimer:</strong>
-            <p style="color:#721c24;">
-                Also, the second plot needs some time to load as it is a 3D plot, and i may not be able to display depending 
-                on your device.
+                As it is a free API, it may not be as accurate as a paid one. Also, the second plot needs some time to load 
+                as it is a 3D plot, and it may not be able to display depending on your device.
             </p>
         </div>
         """,
