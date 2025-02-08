@@ -10,3 +10,4 @@ yfinance==0.2.51
 statsmodels
 scikit-learn
 pandas-datareader
+setuptools
