@@ -67,7 +67,7 @@ st.write("""
 """)
 st.subheader("FINANCIAL SKILLS 📈")
 st.write("""
-\n\n**Financial Markets** - Derivatives, Fixed Income, Portfolio Management\n
+\n\n**Financial Markets** - Derivatives, Fixed Income, Portfolio Management, Greeks & Hedging, Exotic Products\n
 """)
 
 #-- PRESENTATION --
