@@ -53,7 +53,6 @@ This application allows you to create a logistic regression model to predict the
 @st.cache_data
 def load_data(companies, start_date, end_date):
     data = yf.download(companies, start=start_date, end=end_date)
-    st.write("Columns available in downloaded data:", data.columns)  # Affiche les colonnes disponibles
     if 'Adj Close' not in data:
         st.error("The 'Adj Close' column is not available in the downloaded data.")
         return pd.DataFrame()
@@ -210,36 +209,36 @@ else:
     ax.set_title('Precision-Recall Curve')
     st.pyplot(fig)
 
-    # Predict tomorrow's stock movement
-    st.markdown('<div class="prediction-box"><h2>Tomorrow\'s Stock Movement Prediction</h2>', unsafe_allow_html=True)
+# Predict tomorrow's stock movement
+st.markdown('<div class="prediction-box"><h2>Tomorrow\'s Stock Movement Prediction</h2>', unsafe_allow_html=True)
 
-    # Get the latest data for prediction
-    latest_data = yf.download(selected_stocks + [target_stock], period="5d")['Adj Close'].diff().dropna()
-    if latest_data.empty:
-        st.error("No latest data available for prediction.")
-    else:
-        st.write("Latest data available for prediction:", latest_data.tail())  # Affiche les dernières données disponibles
+# Get the latest data for prediction
+latest_data = yf.download(selected_stocks + [target_stock], period="5d")['Adj Close'].diff().dropna()
+if latest_data.empty:
+    st.error("No latest data available for prediction.")
+else:
+    st.write("Latest data available for prediction:", latest_data.tail())  # Affiche les dernières données disponibles
 
-        latest_data = latest_data.T
+    latest_data = latest_data.T
 
-        # Ensure the latest data has the same columns as the training data
-        latest_data = latest_data.reindex(columns=X_train.columns, fill_value=0)
+    # Ensure the latest data has the same columns as the training data
+    latest_data = latest_data.reindex(columns=X_train.columns, fill_value=0)
 
-        # Prepare the latest data for prediction
-        latest_data["AVG_day"] = latest_data.mean(axis=1)
-        if all(stock in selected_stocks for stock in gafam_stocks):
-            latest_data["AVG_day_GAFAM"] = latest_data[gafam_stocks].mean(axis=1)
+    # Prepare the latest data for prediction
+    latest_data["AVG_day"] = latest_data.mean(axis=1)
+    if all(stock in selected_stocks for stock in gafam_stocks):
+        latest_data["AVG_day_GAFAM"] = latest_data[gafam_stocks].mean(axis=1)
 
-        latest_data = latest_data.drop(columns=[target_stock], errors='ignore')
-        latest_data = preprocessor.transform(latest_data)
-        latest_data = pd.DataFrame(latest_data, columns=X_train.columns)
+    latest_data = latest_data.drop(columns=[target_stock], errors='ignore')
+    latest_data = preprocessor.transform(latest_data)
+    latest_data = pd.DataFrame(latest_data, columns=X_train.columns)
 
-        # Make prediction
-        tomorrow_pred_prob = model.predict_proba(latest_data)[:, 1][0]
-        tomorrow_pred = "Up" if tomorrow_pred_prob >= 0.5 else "Down"
+    # Make prediction
+    tomorrow_pred_prob = model.predict_proba(latest_data)[:, 1][0]
+    tomorrow_pred = "Up" if tomorrow_pred_prob >= 0.5 else "Down"
 
-        # Display prediction
-        prediction_class = "up" if tomorrow_pred == "Up" else "down"
-        st.markdown(f'<div class="prediction-result {prediction_class}">Predicted movement for tomorrow: <span>{tomorrow_pred}</span></div>', unsafe_allow_html=True)
-        st.markdown(f'<div class="prediction-result">Probability of moving up: <span>{tomorrow_pred_prob:.2%}</span></div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Display prediction
+    prediction_class = "up" if tomorrow_pred == "Up" else "down"
+    st.markdown(f'<div class="prediction-result {prediction_class}">Predicted movement for tomorrow: <span>{tomorrow_pred}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="prediction-result">Probability of moving up: <span>{tomorrow_pred_prob:.2%}</span></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
