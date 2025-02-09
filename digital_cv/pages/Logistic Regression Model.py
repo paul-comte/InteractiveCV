@@ -52,8 +52,11 @@ This application allows you to create a logistic regression model to predict the
 # Load data
 @st.cache_data
 def load_data(companies, start_date, end_date):
-    data = yf.download(companies, start=start_date, end=end_date)['Adj Close']
-    returns = data.diff().dropna().reset_index().drop("Date", axis=1)
+    data = yf.download(companies, start=start_date, end=end_date)
+    if 'Adj Close' not in data:
+        st.error("The 'Adj Close' column is not available in the downloaded data.")
+        return pd.DataFrame()
+    returns = data['Adj Close'].diff().dropna().reset_index().drop("Date", axis=1)
     return returns
 
 # List of companies
@@ -87,147 +90,155 @@ end_date = st.sidebar.date_input("End date", value=pd.to_datetime('2024-01-01'))
 # Load data based on user selection
 data = load_data(selected_stocks + [target_stock], start_date, end_date)
 
-# Prepare the data
-data['TARGET'] = (data[target_stock] > 0).astype(int)
-data = data.drop(columns=[target_stock])
-data["AVG_day"] = data.mean(axis=1)
-
-# Check if necessary stocks for AVG_day_GAFAM are selected
-gafam_stocks = ['AAPL', 'MSFT', 'AMZN', 'META']
-if all(stock in selected_stocks for stock in gafam_stocks):
-    data["AVG_day_GAFAM"] = data[gafam_stocks].mean(axis=1)
+if data.empty:
+    st.error("No data available for the selected stocks and date range.")
 else:
-    st.warning("Selected stocks do not include all GAFAM stocks (AAPL, MSFT, AMZN, META). AVG_day_GAFAM will not be calculated.")
+    # Prepare the data
+    data['TARGET'] = (data[target_stock] > 0).astype(int)
+    data = data.drop(columns=[target_stock])
+    data["AVG_day"] = data.mean(axis=1)
 
-data = data.dropna()
+    # Check if necessary stocks for AVG_day_GAFAM are selected
+    gafam_stocks = ['AAPL', 'MSFT', 'AMZN', 'META']
+    if all(stock in selected_stocks for stock in gafam_stocks):
+        data["AVG_day_GAFAM"] = data[gafam_stocks].mean(axis=1)
+    else:
+        st.warning("Selected stocks do not include all GAFAM stocks (AAPL, MSFT, AMZN, META). AVG_day_GAFAM will not be calculated.")
 
-# Split the data
-preprocessor = StandardScaler()
-train, test = train_test_split(data, test_size=0.2, shuffle=True, random_state=321, stratify=data["TARGET"])
+    data = data.dropna()
 
-X_train = train.drop(columns=["TARGET"])
-X_train = preprocessor.fit_transform(X_train)
-X_train = pd.DataFrame(X_train, columns=train.drop(columns=["TARGET"]).columns)
-y_train = train["TARGET"]
+    # Split the data
+    preprocessor = StandardScaler()
+    train, test = train_test_split(data, test_size=0.2, shuffle=True, random_state=321, stratify=data["TARGET"])
 
-X_test = test.drop(columns=["TARGET"])
-X_test = preprocessor.transform(X_test)
-X_test = pd.DataFrame(X_test, columns=test.drop(columns=["TARGET"]).columns)
-y_test = test["TARGET"]
+    X_train = train.drop(columns=["TARGET"])
+    X_train = preprocessor.fit_transform(X_train)
+    X_train = pd.DataFrame(X_train, columns=train.drop(columns=["TARGET"]).columns)
+    y_train = train["TARGET"]
 
-# User input for model parameters
-st.sidebar.header("Model Parameters")
-C = st.sidebar.number_input("Regularization Strength (C)", min_value=0.01, max_value=10.0, value=1.0, step=0.01)
+    X_test = test.drop(columns=["TARGET"])
+    X_test = preprocessor.transform(X_test)
+    X_test = pd.DataFrame(X_test, columns=test.drop(columns=["TARGET"]).columns)
+    y_test = test["TARGET"]
 
-# Train the model with Ridge regularization
-model = LogisticRegression(fit_intercept=False, penalty="l2", C=C, solver="lbfgs", max_iter=1000)
-model.fit(X_train, y_train)
+    # User input for model parameters
+    st.sidebar.header("Model Parameters")
+    C = st.sidebar.number_input("Regularization Strength (C)", min_value=0.01, max_value=10.0, value=1.0, step=0.01)
 
-# Model evaluation
-y_pred = model.predict(X_test)
-y_pred_prob = model.predict_proba(X_test)[:, 1]
-accuracy = accuracy_score(y_test, y_pred)
-conf_matrix = confusion_matrix(y_test, y_pred)
-roc_auc = roc_auc_score(y_test, y_pred_prob)
-fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
+    # Train the model with Ridge regularization
+    model = LogisticRegression(fit_intercept=False, penalty="l2", C=C, solver="lbfgs", max_iter=1000)
+    model.fit(X_train, y_train)
 
-# Cross-validation
-cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
+    # Model evaluation
+    y_pred = model.predict(X_test)
+    y_pred_prob = model.predict_proba(X_test)[:, 1]
+    accuracy = accuracy_score(y_test, y_pred)
+    conf_matrix = confusion_matrix(y_test, y_pred)
+    roc_auc = roc_auc_score(y_test, y_pred_prob)
+    fpr, tpr, thresholds = roc_curve(y_test, y_pred_prob)
 
-# Display results
-st.header("Model Results")
-st.write(f"Accuracy: {accuracy:.4f}")
-st.write(f"ROC AUC Score: {roc_auc:.4f}")
-st.write(f"Cross-Validation Accuracy: {cv_scores.mean():.4f}")
+    # Cross-validation
+    cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
 
-# Confusion Matrix
-st.header("Confusion Matrix")
-fig, ax = plt.subplots(figsize=(8, 6))
-sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=['Down', 'Up'], yticklabels=['Down', 'Up'])
-ax.set_xlabel('Predicted')
-ax.set_ylabel('Actual')
-ax.set_title('Confusion Matrix')
-st.pyplot(fig)
+    # Display results
+    st.header("Model Results")
+    st.write(f"Accuracy: {accuracy:.4f}")
+    st.write(f"ROC AUC Score: {roc_auc:.4f}")
+    st.write(f"Cross-Validation Accuracy: {cv_scores.mean():.4f}")
 
-# ROC Curve
-st.header("ROC Curve")
-fig, ax = plt.subplots(figsize=(8, 6))
-ax.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
-ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
-ax.set_xlim([0.0, 1.0])
-ax.set_ylim([0.0, 1.05])
-ax.set_xlabel('False Positive Rate')
-ax.set_ylabel('True Positive Rate')
-ax.set_title('Receiver Operating Characteristic')
-ax.legend(loc="lower right")
-st.pyplot(fig)
+    # Confusion Matrix
+    st.header("Confusion Matrix")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=['Down', 'Up'], yticklabels=['Down', 'Up'])
+    ax.set_xlabel('Predicted')
+    ax.set_ylabel('Actual')
+    ax.set_title('Confusion Matrix')
+    st.pyplot(fig)
 
-# Classification Report
-st.header("Classification Report")
-report = classification_report(y_test, y_pred, output_dict=True)
-report_df = pd.DataFrame(report).transpose()
-st.dataframe(report_df)
+    # ROC Curve
+    st.header("ROC Curve")
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    ax.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    ax.set_xlim([0.0, 1.0])
+    ax.set_ylim([0.0, 1.05])
+    ax.set_xlabel('False Positive Rate')
+    ax.set_ylabel('True Positive Rate')
+    ax.set_title('Receiver Operating Characteristic')
+    ax.legend(loc="lower right")
+    st.pyplot(fig)
 
-# Feature Importance
-st.header("Feature Importance")
-coef_logistic = pd.DataFrame({"Variables": train.drop(columns=["TARGET"]).columns, "Coef": model.coef_[0]})
-st.dataframe(coef_logistic.sort_values("Coef", ascending=False))
+    # Classification Report
+    st.header("Classification Report")
+    report = classification_report(y_test, y_pred, output_dict=True)
+    report_df = pd.DataFrame(report).transpose()
+    st.dataframe(report_df)
 
-# User tips and explanations
-st.sidebar.header("Tips and Explanations")
-st.sidebar.markdown("""
-- **Accuracy**: The proportion of true results among the total number of cases examined.
-- **ROC AUC Score**: Measures the ability of the model to distinguish between classes.
-- **Confusion Matrix**: A table used to describe the performance of a classification model.
-- **Feature Importance**: Shows the impact of each feature on the model's predictions.
-- **Regularization**: Helps to prevent overfitting by adding a penalty for large coefficients.
-- **Cross-Validation**: Evaluates the model's performance on different subsets of the data.
-""")
+    # Feature Importance
+    st.header("Feature Importance")
+    coef_logistic = pd.DataFrame({"Variables": train.drop(columns=["TARGET"]).columns, "Coef": model.coef_[0]})
+    st.dataframe(coef_logistic.sort_values("Coef", ascending=False))
 
-# Additional metrics and visualizations
-st.header("Additional Metrics")
-st.markdown("""
-- **Precision**: The ratio of correctly predicted positive observations to the total predicted positives.
-- **Recall**: The ratio of correctly predicted positive observations to all observations in the actual class.
-- **F1 Score**: The weighted average of Precision and Recall.
-""")
+    # User tips and explanations
+    st.sidebar.header("Tips and Explanations")
+    st.sidebar.markdown("""
+    - **Accuracy**: The proportion of true results among the total number of cases examined.
+    - **ROC AUC Score**: Measures the ability of the model to distinguish between classes.
+    - **Confusion Matrix**: A table used to describe the performance of a classification model.
+    - **Feature Importance**: Shows the impact of each feature on the model's predictions.
+    - **Regularization**: Helps to prevent overfitting by adding a penalty for large coefficients.
+    - **Cross-Validation**: Evaluates the model's performance on different subsets of the data.
+    """)
 
-# Precision-Recall Curve
-st.header("Precision-Recall Curve")
-from sklearn.metrics import precision_recall_curve
-precision, recall, _ = precision_recall_curve(y_test, y_pred_prob)
-fig, ax = plt.subplots(figsize=(8, 6))
-ax.plot(recall, precision, color='purple', lw=2)
-ax.set_xlabel('Recall')
-ax.set_ylabel('Precision')
-ax.set_title('Precision-Recall Curve')
-st.pyplot(fig)
+    # Additional metrics and visualizations
+    st.header("Additional Metrics")
+    st.markdown("""
+    - **Precision**: The ratio of correctly predicted positive observations to the total predicted positives.
+    - **Recall**: The ratio of correctly predicted positive observations to all observations in the actual class.
+    - **F1 Score**: The weighted average of Precision and Recall.
+    """)
+
+    # Precision-Recall Curve
+    st.header("Precision-Recall Curve")
+    from sklearn.metrics import precision_recall_curve
+    precision, recall, _ = precision_recall_curve(y_test, y_pred_prob)
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(recall, precision, color='purple', lw=2)
+    ax.set_xlabel('Recall')
+    ax.set_ylabel('Precision')
+    ax.set_title('Precision-Recall Curve')
+    st.pyplot(fig)
 
 # Predict tomorrow's stock movement
 st.markdown('<div class="prediction-box"><h2>Tomorrow\'s Stock Movement Prediction</h2>', unsafe_allow_html=True)
 
 # Get the latest data for prediction
-latest_data = yf.download(selected_stocks + [target_stock], period="1d")['Adj Close'].diff().dropna()
-latest_data = latest_data.T
+latest_data = yf.download(selected_stocks + [target_stock], period="5d")['Adj Close'].diff().dropna()
+if latest_data.empty:
+    st.error("No latest data available for prediction.")
+else:
+    st.write("Latest data available for prediction:", latest_data.tail())  # Affiche les dernières données disponibles
 
-# Ensure the latest data has the same columns as the training data
-latest_data = latest_data.reindex(columns=X_train.columns, fill_value=0)
+    latest_data = latest_data.T
 
-# Prepare the latest data for prediction
-latest_data["AVG_day"] = latest_data.mean(axis=1)
-if all(stock in selected_stocks for stock in gafam_stocks):
-    latest_data["AVG_day_GAFAM"] = latest_data[gafam_stocks].mean(axis=1)
+    # Ensure the latest data has the same columns as the training data
+    latest_data = latest_data.reindex(columns=X_train.columns, fill_value=0)
 
-latest_data = latest_data.drop(columns=[target_stock], errors='ignore')
-latest_data = preprocessor.transform(latest_data)
-latest_data = pd.DataFrame(latest_data, columns=X_train.columns)
+    # Prepare the latest data for prediction
+    latest_data["AVG_day"] = latest_data.mean(axis=1)
+    if all(stock in selected_stocks for stock in gafam_stocks):
+        latest_data["AVG_day_GAFAM"] = latest_data[gafam_stocks].mean(axis=1)
 
-# Make prediction
-tomorrow_pred_prob = model.predict_proba(latest_data)[:, 1][0]
-tomorrow_pred = "Up" if tomorrow_pred_prob >= 0.5 else "Down"
+    latest_data = latest_data.drop(columns=[target_stock], errors='ignore')
+    latest_data = preprocessor.transform(latest_data)
+    latest_data = pd.DataFrame(latest_data, columns=X_train.columns)
 
-# Display prediction
-prediction_class = "up" if tomorrow_pred == "Up" else "down"
-st.markdown(f'<div class="prediction-result {prediction_class}">Predicted movement for tomorrow: <span>{tomorrow_pred}</span></div>', unsafe_allow_html=True)
-st.markdown(f'<div class="prediction-result">Probability of moving up: <span>{tomorrow_pred_prob:.2%}</span></div>', unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
+    # Make prediction
+    tomorrow_pred_prob = model.predict_proba(latest_data)[:, 1][0]
+    tomorrow_pred = "Up" if tomorrow_pred_prob >= 0.5 else "Down"
+
+    # Display prediction
+    prediction_class = "up" if tomorrow_pred == "Up" else "down"
+    st.markdown(f'<div class="prediction-result {prediction_class}">Predicted movement for tomorrow: <span>{tomorrow_pred}</span></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="prediction-result">Probability of moving up: <span>{tomorrow_pred_prob:.2%}</span></div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
