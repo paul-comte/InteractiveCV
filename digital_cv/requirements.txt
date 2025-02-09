@@ -11,3 +11,4 @@ statsmodels
 scikit-learn
 pandas-datareader
 setuptools
+seaborn
